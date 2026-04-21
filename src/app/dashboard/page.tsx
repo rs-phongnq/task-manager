@@ -17,10 +17,15 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 5;
+  const pageSize = 2;
   const router = useRouter();
 
+  // State cho việc thêm mới
   const [newTitle, setNewTitle] = useState('');
+  
+  // State cho việc chỉnh sửa
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -51,6 +56,32 @@ export default function Dashboard() {
       alert('Lỗi khi lưu: ' + error.message);
     } else {
       setNewTitle(''); 
+      setPage(1); // Quay về trang 1 để thấy task mới nhất
+      fetchTasks();
+    }
+  };
+
+  const startEditing = (task: Task) => {
+    setEditingId(task.id);
+    setEditingTitle(task.title);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditingTitle('');
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editingTitle.trim()) return;
+    const { error } = await supabase
+      .from('tasks')
+      .update({ title: editingTitle.trim() })
+      .eq('id', id);
+
+    if (error) {
+      alert('Lỗi khi cập nhật');
+    } else {
+      setEditingId(null);
       fetchTasks();
     }
   };
@@ -63,6 +94,7 @@ export default function Dashboard() {
   const deleteTask = async (id: string) => {
     if (confirm('Xóa nhé?')) { 
       await supabase.from('tasks').delete().eq('id', id); 
+      setPage(1); // Quay về trang 1
       fetchTasks(); 
     }
   };
@@ -93,11 +125,53 @@ export default function Dashboard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {loading ? <p style={{ textAlign: 'center' }}>Đang tải...</p> : tasks.map(task => (
           <div key={task.id} className="glass-card" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <input type="checkbox" checked={task.is_completed} onChange={() => toggleComplete(task.id, task.is_completed)} />
-            <div style={{ flex: 1, opacity: task.is_completed ? 0.5 : 1 }}>
-              <h3 style={{ textDecoration: task.is_completed ? 'line-through' : 'none', fontSize: '1.1rem' }}>{task.title}</h3>
-            </div>
-            <button onClick={() => deleteTask(task.id)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            {editingId === task.id ? (
+              // Giao diện khi đang Sửa
+              <>
+                <input 
+                  className="input-field" 
+                  style={{ flex: 1 }} 
+                  value={editingTitle} 
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  autoFocus
+                />
+                <button onClick={() => saveEdit(task.id)} className="btn-primary" style={{ padding: '0.5rem 1rem' }}>Lưu</button>
+                <button onClick={cancelEditing} className="btn-secondary" style={{ padding: '0.5rem 1rem' }}>Hủy</button>
+              </>
+            ) : (
+              // Giao diện hiển thị bình thường
+              <>
+                <input 
+                  type="checkbox" 
+                  checked={task.is_completed} 
+                  onChange={() => toggleComplete(task.id, task.is_completed)}
+                  disabled={task.is_completed}
+                  style={{ cursor: task.is_completed ? 'not-allowed' : 'pointer' }}
+                />
+                <div style={{ flex: 1, opacity: task.is_completed ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                    <h3 style={{ textDecoration: task.is_completed ? 'line-through' : 'none', fontSize: '1.1rem' }}>{task.title}</h3>
+                    <span style={{ 
+                      fontSize: '0.7rem', 
+                      padding: '2px 10px', 
+                      borderRadius: '20px', 
+                      fontWeight: '600',
+                      background: task.is_completed ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: task.is_completed ? '#4ade80' : '#fbbf24',
+                      border: `1px solid ${task.is_completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`
+                    }}>
+                      {task.is_completed ? 'Đã xong' : 'Đang làm'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {!task.is_completed && (
+                    <button onClick={() => startEditing(task)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>Sửa</button>
+                  )}
+                  <button onClick={() => deleteTask(task.id)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}>Xóa</button>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
